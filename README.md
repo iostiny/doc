@@ -29,6 +29,7 @@
 ### 03 · AGENT / LLM
 
 - 📄 [**AGENT 时代，Markdown 已死，HTML 当立**](./html-over-markdown/) — Thariq《Unreasonable Effectiveness of HTML》原文图谱与中文解读
+- 🧠 [**LLM 到底是怎么工作的 · 中文编译图谱**](./how-llms-work/) — 0xkato《How LLMs Actually Work》中文编译重述：顺着一句话在模型内部走完的全程讲分词、embedding、RoPE、attention、多头、FFN/MoE、残差流、下一个 token 预测，含 temperature 滑杆 softmax 实验台与「2017 原版 vs 2025 共识」速查表。给写代码但没啃过 Transformer 的人。
 
 ### 04 · 网络与系统
 
@@ -53,6 +54,8 @@ doc/
 │   ├── index.html
 │   └── beginner/
 ├── html-over-markdown/     ← AGENT / LLM
+│   └── index.html
+├── how-llms-work/          ← AGENT / LLM · LLM 工作原理编译图谱
 │   └── index.html
 ├── vpn-tutorial/           ← 网络与系统 · VPN/代理工具原理 (30 步)
 │   └── index.html

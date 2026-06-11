@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LLM 到底是怎么工作的 · 中文编译图谱</title>
+<meta name="description" content="编译自 0xkato《How LLMs Actually Work》：从分词、embedding、RoPE、attention、FFN、残差流到下一个 token 预测，给写代码但没啃过 Transformer 的人的一份中文导览。">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg-page:        #fdfaf6;
+  --bg-card:        #ffffff;
+  --bg-soft:        #fffaf2;
+  --text-primary:   #1f2937;
+  --text-secondary: #4b5563;
+  --text-muted:     #9ca3af;
+  --cherry:         #aa1141;
+  --cherry-deep:    #9a0036;
+  --cherry-pink:    #ea68b6;
+  --cherry-glass:   #fce4e4;
+  --cherry-soft:    #ffd6df;
+  --slate:          #475569;
+  --slate-deep:     #334155;
+  --slate-soft:     #e2e8f0;
+  --slate-glass:    #f1f5f9;
+  --amber:          #b45309;
+  --amber-soft:     #fef3c7;
+  --teal:           #0e7490;
+  --teal-soft:      #cffafe;
+  --green:          #15803d;
+  --green-soft:     #dcfce7;
+  --violet:         #6d28d9;
+  --violet-soft:    #ede9fe;
+  --red-deep:       #b91c1c;
+  --rule:           #e5e7eb;
+  --rule-soft:      #f1eee8;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  background: var(--bg-page);
+  color: var(--text-primary);
+  line-height: 1.78;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+.container {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 3rem 1.6rem 2rem;
+}
+
+/* ============ Top nav ============ */
+.topnav {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 2.2rem;
+}
+.topnav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px dashed var(--rule);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.topnav a:hover { color: var(--cherry); border-bottom-color: var(--cherry); }
+.topnav .crumb { color: var(--cherry-pink); margin: 0 0.4em; }
+
+/* ============ Hero ============ */
+.hero {
+  text-align: center;
+  padding: 0.4rem 0 2rem;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 2.2rem;
+}
+.hero-tag {
+  display: inline-block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  padding: 4px 12px;
+  border-radius: 12px;
+  background: var(--cherry-glass);
+  color: var(--cherry-deep);
+  margin-bottom: 1.1rem;
+}
+.hero-title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.015em;
+  margin-bottom: 0.7rem;
+  line-height: 1.25;
+}
+.hero-title .accent { color: var(--cherry-deep); }
+.hero-subtitle {
+  font-size: 1.0rem;
+  color: var(--text-secondary);
+  max-width: 720px;
+  margin: 0 auto 1.2rem;
+  line-height: 1.7;
+}
+.hero-meta {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+.hero-meta a {
+  color: var(--cherry);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.hero-meta a:hover { border-bottom-color: var(--cherry); }
+.hero-meta .sep { color: var(--rule); margin: 0 0.5em; }
+
+/* ============ TOC chips ============ */
+.toc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: center;
+  margin-bottom: 2.6rem;
+}
+.toc a {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: 4px 11px;
+  border: 1px solid var(--rule);
+  border-radius: 12px;
+  background: var(--bg-card);
+  transition: all 0.15s ease;
+}
+.toc a:hover {
+  color: var(--cherry-deep);
+  border-color: var(--cherry);
+  background: var(--cherry-glass);
+}
+.toc a .n { color: var(--cherry-pink); margin-right: 0.35em; }
+
+/* ============ Intro ============ */
+.intro {
+  background: linear-gradient(to right, #fff5ea, #ffffff, #fff5ea);
+  border-left: 3px solid var(--amber);
+  border-radius: 8px;
+  padding: 1.3rem 1.6rem;
+  margin-bottom: 3rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  line-height: 1.78;
+}
+.intro p { margin-bottom: 0.6rem; }
+.intro p:last-child { margin-bottom: 0; }
+.intro strong { color: var(--amber); font-weight: 600; }
+.intro a { color: var(--cherry); text-decoration: none; border-bottom: 1px dashed var(--cherry-soft); }
+.intro a:hover { border-bottom-style: solid; }
+
+/* ============ Section ============ */
+.section { margin-bottom: 3.6rem; }
+.sec-kicker {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cherry-pink);
+  margin-bottom: 0.3rem;
+}
+.section h2 {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--cherry-deep);
+  margin-bottom: 1rem;
+  letter-spacing: -0.005em;
+}
+.section p {
+  font-size: 0.96rem;
+  color: var(--text-secondary);
+  max-width: 800px;
+  margin-bottom: 1rem;
+}
+.section p strong { color: var(--text-primary); font-weight: 600; }
+.section p b.hl { color: var(--cherry-deep); font-weight: 600; }
+code, .mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.85em;
+}
+.section p code, .section li code, .intro code, .aside code {
+  background: var(--slate-glass);
+  color: var(--slate-deep);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+.section ul.plain {
+  max-width: 800px;
+  margin: 0 0 1rem 1.3rem;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+.section ul.plain li { margin-bottom: 0.4rem; }
+.section ul.plain li::marker { color: var(--cherry-pink); }
+
+/* ============ 人话 aside ============ */
+.aside {
+  max-width: 800px;
+  background: var(--cherry-glass);
+  border-left: 3px solid var(--cherry);
+  border-radius: 0 8px 8px 0;
+  padding: 0.85rem 1.2rem;
+  margin: 1.2rem 0 1.4rem;
+  font-size: 0.92rem;
+  color: var(--text-primary);
+  line-height: 1.75;
+}
+.aside .tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cherry-deep);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+/* ============ Figure card ============ */
+.figure {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 1.4rem 1.3rem 1.1rem;
+  margin: 1.5rem 0 1.6rem;
+  box-shadow: 0 1px 3px rgba(170, 17, 65, 0.04);
+}
+.figure svg { display: block; width: 100%; height: auto; max-width: 100%; }
+.figure .caption {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: 0.8rem;
+  letter-spacing: 0.03em;
+}
+
+/* ============ Details fold ============ */
+details.fold {
+  max-width: 800px;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  margin: 1.1rem 0 1.4rem;
+  overflow: hidden;
+}
+details.fold summary {
+  cursor: pointer;
+  user-select: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding: 0.7rem 1.1rem;
+  transition: color 0.15s ease, background 0.15s ease;
+  list-style: none;
+}
+details.fold summary::-webkit-details-marker { display: none; }
+details.fold summary::before {
+  content: '▸';
+  color: var(--cherry-pink);
+  margin-right: 0.55em;
+  display: inline-block;
+  transition: transform 0.15s ease;
+}
+details.fold[open] summary::before { transform: rotate(90deg); }
+details.fold summary:hover { color: var(--cherry-deep); background: var(--bg-soft); }
+details.fold[open] summary { color: var(--cherry-deep); border-bottom: 1px solid var(--rule-soft); }
+details.fold .fold-body {
+  padding: 0.9rem 1.2rem 1rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.78;
+}
+details.fold .fold-body p { margin-bottom: 0.6rem; font-size: 0.9rem; }
+details.fold .fold-body p:last-child { margin-bottom: 0; }
+details.fold .fold-body .formula {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.86rem;
+  background: var(--bg-soft);
+  border: 1px solid var(--rule-soft);
+  border-radius: 8px;
+  padding: 0.6rem 0.9rem;
+  margin: 0.5rem 0 0.7rem;
+  color: var(--slate-deep);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+/* ============ 温度实验台 ============ */
+.lab {
+  background: var(--bg-card);
+  border: 1.5px solid var(--cherry-soft);
+  border-radius: 14px;
+  padding: 1.4rem 1.5rem 1.5rem;
+  margin: 1.5rem 0 1.6rem;
+  box-shadow: 0 2px 8px rgba(170, 17, 65, 0.06);
+}
+.lab-head {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cherry-deep);
+  margin-bottom: 0.7rem;
+}
+.lab-prompt {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+.lab-prompt .ctx {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--slate-glass);
+  color: var(--slate-deep);
+  padding: 2px 8px;
+  border-radius: 6px;
+}
+.lab-prompt .out {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--green-soft);
+  color: var(--green);
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 6px;
+  min-width: 2.4em;
+  display: inline-block;
+  text-align: center;
+}
+.lab-slider {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  margin-bottom: 1.1rem;
+  flex-wrap: wrap;
+}
+.lab-slider label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+.lab-slider input[type="range"] {
+  flex: 1;
+  min-width: 160px;
+  accent-color: var(--cherry);
+}
+.lab-slider .tval {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: var(--cherry-deep);
+  min-width: 3.2em;
+  text-align: right;
+}
+.lab-bars { display: flex; flex-direction: column; gap: 0.45rem; margin-bottom: 1.1rem; }
+.bar-row { display: flex; align-items: center; gap: 0.7rem; }
+.bar-row .tok {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.84rem;
+  color: var(--text-primary);
+  width: 4.6em;
+  text-align: right;
+  flex-shrink: 0;
+}
+.bar-row .logit {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  width: 7em;
+  flex-shrink: 0;
+}
+.bar-row .track {
+  flex: 1;
+  height: 18px;
+  background: var(--bg-soft);
+  border-radius: 5px;
+  overflow: hidden;
+  border: 1px solid var(--rule-soft);
+}
+.bar-row .fill {
+  height: 100%;
+  background: linear-gradient(to right, var(--cherry), var(--cherry-pink));
+  border-radius: 4px 0 0 4px;
+  transition: width 0.18s ease;
+  min-width: 1px;
+}
+.bar-row .pct {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  color: var(--text-secondary);
+  width: 4.4em;
+  flex-shrink: 0;
+}
+.lab-actions { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+.lab-actions button {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--cherry);
+  background: transparent;
+  border: 1.5px solid var(--cherry);
+  border-radius: 8px;
+  padding: 0.42rem 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.lab-actions button:hover { background: var(--cherry); color: #fff; }
+.lab-note {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ============ Cheatsheet table ============ */
+.cheat {
+  width: 100%;
+  max-width: 800px;
+  border-collapse: collapse;
+  margin: 1.2rem 0 1.4rem;
+  font-size: 0.88rem;
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.cheat th {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: left;
+  color: var(--cherry-deep);
+  background: var(--bg-soft);
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--rule);
+}
+.cheat td {
+  padding: 0.55rem 0.9rem;
+  border-bottom: 1px solid var(--rule-soft);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+.cheat tr:last-child td { border-bottom: none; }
+.cheat td:first-child {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8rem;
+  color: var(--slate-deep);
+  white-space: nowrap;
+}
+
+/* ============ Refs card ============ */
+.refs {
+  background: var(--bg-card);
+  border: 1px solid var(--rule);
+  border-radius: 14px;
+  padding: 1.3rem 1.5rem;
+  margin-top: 1rem;
+}
+.refs h3 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: var(--cherry-deep);
+  margin-bottom: 0.8rem;
+}
+.refs ul { list-style: none; }
+.refs li {
+  font-size: 0.86rem;
+  color: var(--text-secondary);
+  padding: 0.32rem 0;
+  border-bottom: 1px dashed var(--rule-soft);
+}
+.refs li:last-child { border-bottom: none; }
+.refs a {
+  color: var(--cherry);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+}
+.refs a:hover { border-bottom-color: var(--cherry); }
+.refs .who {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-left: 0.5em;
+}
+
+/* ============ Footer ============ */
+footer {
+  border-top: 1px solid var(--rule);
+  margin-top: 3.4rem;
+  padding-top: 1.4rem;
+  text-align: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0 0.8rem;
+}
+footer a {
+  color: var(--text-secondary);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+  transition: all 0.15s ease;
+}
+footer a:hover { color: var(--cherry); border-bottom-color: var(--cherry); }
+footer .sep { color: var(--rule); user-select: none; }
+
+/* ============ Responsive ============ */
+@media (max-width: 720px) {
+  .hero-title { font-size: 1.6rem; }
+  .container { padding: 2.2rem 1rem 1.6rem; }
+  .section h2 { font-size: 1.3rem; }
+  .lab { padding: 1.1rem 1rem 1.2rem; }
+  .bar-row .logit { display: none; }
+  .cheat { font-size: 0.8rem; }
+  .cheat th, .cheat td { padding: 0.45rem 0.6rem; }
+}
+@media (max-width: 600px) {
+  svg .decor { display: none; }
+  .figure { padding: 1rem 0.7rem 0.8rem; }
+  .bar-row .tok { width: 3.6em; }
+  .toc a { font-size: 0.66rem; }
+}
+</style>
+</head>
+<body>
+<div class="container">
+
+  <nav class="topnav">
+    <a href="../index.html">iostiny / doc</a><span class="crumb">›</span><span>AGENT / LLM</span><span class="crumb">›</span><span>LLM 到底是怎么工作的</span>
+  </nav>
+
+  <header class="hero">
+    <span class="hero-tag">LLM · TRANSFORMER · 编译图谱</span>
+    <h1 class="hero-title">LLM 到底是怎么<span class="accent">工作</span>的</h1>
+    <p class="hero-subtitle">
+      你每天都在跟它说话，但它拿到你那句话之后到底发生了什么？
+      这篇从分词一路讲到吐出下一个字，给写代码、但一直没空啃 Transformer 的你。
+    </p>
+    <p class="hero-meta">
+      编译自 <a href="https://www.0xkato.xyz/how-llms-actually-work/" target="_blank" rel="noopener">0xkato 《How LLMs Actually Work》</a>（2026-06）
+      <span class="sep">·</span>中文重述 + 配图 by iostiny
+      <span class="sep">·</span>约 25 分钟
+    </p>
+  </header>
+
+  <nav class="toc">
+    <a href="#tokenization"><span class="n">01</span>分词</a>
+    <a href="#embeddings"><span class="n">02</span>Embedding</a>
+    <a href="#position"><span class="n">03</span>位置编码</a>
+    <a href="#attention"><span class="n">04</span>Attention</a>
+    <a href="#multihead"><span class="n">05</span>多头</a>
+    <a href="#ffn"><span class="n">06</span>FFN</a>
+    <a href="#residual"><span class="n">07</span>残差流</a>
+    <a href="#nexttoken"><span class="n">08</span>下一个 token</a>
+    <a href="#archvsweights"><span class="n">09</span>架构 vs 权重</a>
+    <a href="#future"><span class="n">10</span>往后看</a>
+  </nav>
+
+  <div class="intro">
+    <p><strong>这篇是编译，不是逐句翻译。</strong>原文是 0xkato 写的《How LLMs Actually Work》，英文原文写得很顺，技术点给得很实。我按原文的叙事线索用中文重新讲了一遍，所有技术细节、数字、例子都保留，行文是我自己的。想看原汁原味的，<a href="https://www.0xkato.xyz/how-llms-actually-work/" target="_blank" rel="noopener">点这里读原文</a>。</p>
+    <p><strong>适合谁：</strong>会写代码，知道矩阵乘法是怎么回事，但从来没认真读过《Attention Is All You Need》，看到论文里的 RoPE、GQA、SwiGLU 这些缩写就头大的人。读完这篇，你再去翻模型卡（model card）或者新模型的技术报告，应该能知道每一节在说架构的哪个零件。</p>
+    <p>一句话先把全文剧透了：<strong>现代 LLM = 把文本切成整数 → 查表变成向量 → 几十层"交流 + 各自思考" → 猜下一个 token → 循环</strong>。下面把每一步拆开讲。</p>
+  </div>
+
+  <!-- ============ 全景图 ============ -->
+  <div class="figure">
+    <svg viewBox="0 0 1100 230" preserveAspectRatio="xMidYMid meet" aria-label="LLM 数据流全景">
+      <defs>
+        <marker id="arr-slate" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+        </marker>
+        <marker id="arr-cherry" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z" fill="#aa1141"/>
+        </marker>
+      </defs>
+      <text x="550" y="22" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="13" fill="#9ca3af">一句话在 LLM 内部走完的全程（本文目录就是这条流水线）</text>
+
+      <!-- 1 text -->
+      <rect x="20" y="70" width="120" height="56" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+      <text x="80" y="94" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="13" fill="#334155">"今天天气真"</text>
+      <text x="80" y="114" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="9" fill="#94a3b8">raw text</text>
+
+      <line x1="143" y1="98" x2="173" y2="98" stroke="#475569" stroke-width="1.8" marker-end="url(#arr-slate)"/>
+
+      <!-- 2 tokens -->
+      <rect x="176" y="70" width="130" height="56" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+      <text x="241" y="92" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#b45309">[1271, 88,</text>
+      <text x="241" y="106" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#b45309">9042, …]</text>
+      <text x="241" y="120" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="9" fill="#b45309">token ids</text>
+
+      <line x1="309" y1="98" x2="339" y2="98" stroke="#475569" stroke-width="1.8" marker-end="url(#arr-slate)"/>
+
+      <!-- 3 embeddings -->
+      <rect x="342" y="70" width="120" height="56" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+      <text x="402" y="92" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#b45309">查表 → 向量</text>
+      <text x="402" y="110" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="9" fill="#b45309">4096 dims each</text>
+
+      <line x1="465" y1="98" x2="495" y2="98" stroke="#475569" stroke-width="1.8" marker-end="url(#arr-slate)"/>
+
+      <!-- 4 transformer stack -->
+      <g>
+        <rect x="510" y="48" width="240" height="120" rx="10" fill="#fce4e4" stroke="#aa1141" stroke-width="2"/>
+        <rect x="504" y="42" width="240" height="120" rx="10" fill="#fce4e4" stroke="#aa1141" stroke-width="1" opacity="0.45" class="decor"/>
+        <rect x="498" y="36" width="240" height="120" rx="10" fill="#fce4e4" stroke="#aa1141" stroke-width="1" opacity="0.25" class="decor"/>
+        <text x="630" y="72" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="12" font-weight="700" fill="#9a0036">Transformer 层 × N</text>
+        <rect x="535" y="84" width="90" height="32" rx="6" fill="#fff" stroke="#aa1141" stroke-width="1.3"/>
+        <text x="580" y="104" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#aa1141">Attention</text>
+        <rect x="640" y="84" width="76" height="32" rx="6" fill="#fff" stroke="#0e7490" stroke-width="1.3"/>
+        <text x="678" y="104" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#0e7490">FFN</text>
+        <text x="630" y="142" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="10" fill="#aa1141">残差流串起来 · Norm 稳住数值</text>
+      </g>
+
+      <line x1="753" y1="98" x2="783" y2="98" stroke="#475569" stroke-width="1.8" marker-end="url(#arr-slate)"/>
+
+      <!-- 5 logits -->
+      <g>
+        <rect x="786" y="58" width="130" height="84" rx="8" fill="#dcfce7" stroke="#15803d" stroke-width="1.5"/>
+        <text x="851" y="76" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#15803d">logits → softmax</text>
+        <rect x="800" y="84"  width="80" height="8" rx="2" fill="#15803d" opacity="0.85"/>
+        <rect x="800" y="97"  width="46" height="8" rx="2" fill="#15803d" opacity="0.55"/>
+        <rect x="800" y="110" width="24" height="8" rx="2" fill="#15803d" opacity="0.35"/>
+        <rect x="800" y="123" width="10" height="8" rx="2" fill="#15803d" opacity="0.2"/>
+        <text x="893" y="91"  font-family="'Noto Sans SC', sans-serif" font-size="9" fill="#15803d">好</text>
+        <text x="893" y="104" font-family="'Noto Sans SC', sans-serif" font-size="9" fill="#15803d">不</text>
+        <text x="893" y="117" font-family="'Noto Sans SC', sans-serif" font-size="9" fill="#15803d">热</text>
+        <text x="893" y="130" font-family="'Noto Sans SC', sans-serif" font-size="9" fill="#15803d">…</text>
+      </g>
+
+      <line x1="919" y1="98" x2="949" y2="98" stroke="#aa1141" stroke-width="1.8" marker-end="url(#arr-cherry)"/>
+
+      <!-- 6 sampled -->
+      <rect x="952" y="70" width="120" height="56" rx="8" fill="#fce4e4" stroke="#aa1141" stroke-width="1.5"/>
+      <text x="1012" y="94" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="14" font-weight="700" fill="#9a0036">"好"</text>
+      <text x="1012" y="114" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="9" fill="#aa1141">拼回输入，再来一轮</text>
+
+      <!-- loop arrow -->
+      <path d="M 1012 130 Q 1012 205 550 205 Q 80 205 80 132" stroke="#aa1141" stroke-width="1.5" stroke-dasharray="5 4" fill="none" marker-end="url(#arr-cherry)" class="decor"/>
+      <text x="550" y="196" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="11" fill="#aa1141" class="decor">整段回答 = 这个循环跑几百次，一次一个 token</text>
+    </svg>
+    <p class="caption">FIG 0 · 全景：text → token → 向量 → N 层 → logits → 采样 → 循环</p>
+  </div>
+
+  <!-- ================= 01 Tokenization ================= -->
+  <section class="section" id="tokenization">
+    <p class="sec-kicker">01 · TOKENIZATION</p>
+    <h2>分词：模型从来没"看见"过文字</h2>
+    <p>先把一个最常见的误会摆平：LLM 不读文字。你打进去的那句话，第一站就被<strong>分词器（tokenizer）</strong>切碎，换成一串整数。每个整数是一个编号，指向一张固定的词表里的某一项。现代模型的词表大概在<b class="hl">几万到几十万</b>这个量级。从这一刻起，模型的世界里只有整数序列，没有字符串。</p>
+    <p>关键的设计选择是：token 通常<strong>不是完整的词，而是子词（subword）</strong>。比如 "tokenization" 会被切成 <code>token</code> + <code>ization</code>，"running" 可能切成 <code>run</code> + <code>ning</code>。为什么不直接一词一个编号？因为全词词表会大到离谱，而且碰到没见过的新词直接抓瞎；反过来按单个字符切，词表又太小，每个 token 承载的信息太稀。子词是两头折中：常见词独占一个 token，生僻词用几个零件拼。</p>
+    <div class="aside">
+      <span class="tag">顺带解了一个经典谜题</span>
+      为什么 LLM 一度数不清 "strawberry" 里有几个 r？因为它根本没见过 s-t-r-a-w-b-e-r-r-y 这十个字母——它见到的是一两个 token 编号。让你看着一个哈希值数原文里有几个 r，你也数不出来。
+    </div>
+    <p>具体切法各家不同：GPT 系用 BPE（Byte Pair Encoding）的变体，LLaMA 一系用 SentencePiece。所以同一句话，不同模型切出来的 token 数可以不一样——这也是为什么"按 token 计费"时同样的 prompt 在不同 API 上价格有差异。</p>
+    <div class="figure">
+      <svg viewBox="0 0 1100 150" preserveAspectRatio="xMidYMid meet" aria-label="分词示例">
+        <text x="550" y="22" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">同一个词被切成子词零件，每个零件换成一个编号</text>
+        <text x="140" y="80" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="17" fill="#334155">tokenization</text>
+        <line x1="240" y1="74" x2="300" y2="74" stroke="#475569" stroke-width="1.8" marker-end="url(#arr-slate)"/>
+        <rect x="310" y="50" width="130" height="46" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+        <text x="375" y="72" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="13" fill="#b45309">token</text>
+        <text x="375" y="88" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#b45309">id = 5239</text>
+        <text x="455" y="78" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="15" fill="#9ca3af">+</text>
+        <rect x="470" y="50" width="130" height="46" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+        <text x="535" y="72" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="13" fill="#b45309">ization</text>
+        <text x="535" y="88" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#b45309">id = 2167</text>
+        <text x="720" y="62" font-family="'Noto Sans SC', sans-serif" font-size="11" fill="#4b5563">· 常见词：独占一个 token</text>
+        <text x="720" y="82" font-family="'Noto Sans SC', sans-serif" font-size="11" fill="#4b5563">· 生僻词：几个子词零件拼起来</text>
+        <text x="720" y="102" font-family="'Noto Sans SC', sans-serif" font-size="11" fill="#4b5563">· 词表量级：几万 ~ 几十万项</text>
+        <text x="550" y="135" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#9ca3af" class="decor">GPT 系 → BPE 变体 · LLaMA 系 → SentencePiece</text>
+      </svg>
+      <p class="caption">FIG 1 · subword 切分：词表大小和泛化能力的折中</p>
+    </div>
+  </section>
+
+  <!-- ================= 02 Embeddings ================= -->
+  <section class="section" id="embeddings">
+    <p class="sec-kicker">02 · EMBEDDINGS</p>
+    <h2>Embedding：一张巨大的查询表，给编号赋予含义</h2>
+    <p>编号本身没有任何含义——5239 和 5240 之间不存在"语义相邻"。含义是<strong>embedding 矩阵</strong>给的。你可以把它想成一张巨大的查询表：词表里每一项对应一行，每行是一个很长的浮点数向量。token 编号进来，查表，出去的就是这个 token 的向量表示。</p>
+    <p>这个向量有多长？就是模型的"隐藏层宽度"。<b class="hl">7B 量级的模型一般是每个 token 4096 个数字</b>，更大的模型用更宽的向量。从这往后，整个模型内部流动的都是这种向量。</p>
+    <p>有意思的是这张表学出来的性质：<strong>语义相近的 token，向量也相近</strong>。"king" 离 "queen" 近，"Paris" 离 "France" 近。更夸张的是向量还能做算术，那个最出名的例子是：</p>
+    <div class="figure">
+      <svg viewBox="0 0 1100 140" preserveAspectRatio="xMidYMid meet" aria-label="embedding 向量算术">
+        <text x="550" y="24" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">向量空间里的方向是有含义的：&#x201C;性别&#x201D;这个方向是模型自己从数据里学出来的</text>
+        <g font-family="'JetBrains Mono', monospace" font-size="16" font-weight="600">
+          <rect x="170" y="55" width="100" height="44" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+          <text x="220" y="83" text-anchor="middle" fill="#b45309">king</text>
+          <text x="305" y="83" text-anchor="middle" fill="#475569">−</text>
+          <rect x="340" y="55" width="100" height="44" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+          <text x="390" y="83" text-anchor="middle" fill="#475569">man</text>
+          <text x="475" y="83" text-anchor="middle" fill="#475569">+</text>
+          <rect x="510" y="55" width="120" height="44" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+          <text x="570" y="83" text-anchor="middle" fill="#475569">woman</text>
+          <text x="668" y="83" text-anchor="middle" fill="#aa1141">≈</text>
+          <rect x="700" y="55" width="120" height="44" rx="8" fill="#fce4e4" stroke="#aa1141" stroke-width="2"/>
+          <text x="760" y="83" text-anchor="middle" fill="#9a0036">queen</text>
+        </g>
+        <text x="550" y="126" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="11" fill="#4b5563">没人写过一行代码定义&#x201C;性别方向&#x201D;——纯粹是预测下一个 token 的副产品</text>
+      </svg>
+      <p class="caption">FIG 2 · 著名的 king − man + woman ≈ queen</p>
+    </div>
+    <p>重点在最后一句：<strong>这些语义结构没有任何人去设计</strong>。训练目标只有一个——预测下一个 token——而这些关系是为了把这件事做好而自然涌现出来的。这是全文反复出现的主题：看起来很"智能"的结构，都是从一个很笨的目标里长出来的。</p>
+  </section>
+
+  <!-- ================= 03 Positional Encoding ================= -->
+  <section class="section" id="position">
+    <p class="sec-kicker">03 · POSITIONAL ENCODING</p>
+    <h2>位置编码：attention 天生不知道词序</h2>
+    <p>这里有个反直觉的事实：后面要讲的 attention 机制，本身<strong>完全不知道顺序</strong>。对它来说一句话就是一袋子 token——"狗咬人"和"人咬狗"在它眼里是同一袋东西。"dog" 出现在第 1 个位置和第 5 个位置，查出来的 embedding 一模一样。顺序信息必须从外面注入。</p>
+    <p>2017 年那篇原始 Transformer 论文的做法是：用一组不同频率的正弦、余弦波，给每个位置生成一个独特的"波形指纹"，直接<strong>加</strong>到 token 的 embedding 上。好处是对没见过的更长序列也能外推；坏处是同一个向量既要装含义又要装位置，而且绝对位置的泛化效果不好。</p>
+    <p>现在的主流是 <strong>RoPE（Rotary Position Embeddings，Su et al. 2021）</strong>，LLaMA、Mistral、Gemma、Qwen 全在用。思路换了一个维度：不往 embedding 里加东西，而是在做 attention 之前，把 Query 和 Key 向量<strong>按位置旋转一个角度</strong>——位置 1 转一点点，位置 100 转得多。这样两个 token 做匹配时，起作用的是它们之间的<strong>相对旋转差</strong>，也就是相对距离。</p>
+    <div class="figure">
+      <svg viewBox="0 0 1100 190" preserveAspectRatio="xMidYMid meet" aria-label="RoPE 旋转示意">
+        <text x="550" y="22" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">RoPE：按位置旋转 Q/K 向量，attention 里只剩下&#x201C;相对角度差&#x201D;= 相对距离</text>
+        <!-- pos 1 -->
+        <g>
+          <circle cx="220" cy="110" r="52" fill="none" stroke="#e5e7eb" stroke-width="1.3"/>
+          <line x1="220" y1="110" x2="270" y2="96" stroke="#0e7490" stroke-width="2.5" marker-end="url(#arr-teal-rope)"/>
+          <text x="220" y="182" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#0e7490">pos = 1 · 转 15°</text>
+        </g>
+        <!-- pos 10 -->
+        <g>
+          <circle cx="550" cy="110" r="52" fill="none" stroke="#e5e7eb" stroke-width="1.3"/>
+          <line x1="550" y1="110" x2="578" y2="66" stroke="#0e7490" stroke-width="2.5" marker-end="url(#arr-teal-rope)"/>
+          <text x="550" y="182" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#0e7490">pos = 10 · 转 58°</text>
+        </g>
+        <!-- pos 100 -->
+        <g>
+          <circle cx="880" cy="110" r="52" fill="none" stroke="#e5e7eb" stroke-width="1.3"/>
+          <line x1="880" y1="110" x2="838" y2="80" stroke="#0e7490" stroke-width="2.5" marker-end="url(#arr-teal-rope)"/>
+          <text x="880" y="182" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#0e7490">pos = 100 · 转得更多</text>
+        </g>
+        <defs>
+          <marker id="arr-teal-rope" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0e7490"/>
+          </marker>
+        </defs>
+      </svg>
+      <p class="caption">FIG 3 · RoPE：位置 = 旋转角度，相对位置 = 角度差</p>
+    </div>
+    <p>RoPE 的三个实际好处：编码的是相对位置（attention 真正需要的就是这个）；对更长的上下文泛化更好；而且不增加任何参数。</p>
+    <div class="aside">
+      <span class="tag">这解释了一条你可能听过的 prompt 玄学</span>
+      Liu et al. 2023 发现了 <b>"lost in the middle"</b> 现象：长 prompt 里，开头和结尾的信息模型用得好，<b>中间的信息利用率明显下降</b>。所以"重要内容放前面"、"关键指令在结尾再重复一遍"这类提示词技巧不是迷信，是有论文背书的。
+    </div>
+  </section>
+
+  <!-- ================= 04 Attention ================= -->
+  <section class="section" id="attention">
+    <p class="sec-kicker">04 · ATTENTION</p>
+    <h2>Attention：每个 token 环顾四周，决定该听谁的</h2>
+    <p>到了整个架构的心脏。attention 干的事一句话能说完：<strong>每个 token 看一圈它被允许看的其他 token，决定谁重要，然后按重要程度把别人的信息加权揉进自己的表示里</strong>。难的是记住三个角色，每个 token 同时扮演这三个角色（三套变换矩阵都是训练学出来的）：</p>
+    <ul class="plain">
+      <li><strong>Query（Q）</strong>——"我在找什么"</li>
+      <li><strong>Key（K）</strong>——"我这儿有什么，可以被别人找到"</li>
+      <li><strong>Value（V）</strong>——"真匹配上了，我实际交出去的信息"</li>
+    </ul>
+    <p>流程是：拿自己的 Q 去跟所有可见 token 的 K 算匹配分（用缩放点积），分数过一遍 softmax 变成总和为 1 的权重，再用这组权重对所有 V 做加权平均——结果就是这个 token 的新表示。</p>
+    <p>抽象的话看个具体例子。处理 <code>The cat that I saw yesterday was sleeping</code> 里的 "was" 时：模型训练里学到了"动词得找主语"，所以 "was" 的 Q 跟 "cat" 的 K 点积很高，跟 "yesterday" 的 K 点积很低。softmax 之后 "cat" 拿到大头权重，"was" 的新表示就主要由 "cat" 的 Value 构成——动词成功认领了自己的主语，隔着一个定语从句。</p>
+    <div class="figure">
+      <svg viewBox="0 0 1100 220" preserveAspectRatio="xMidYMid meet" aria-label="attention 例子">
+        <defs>
+          <marker id="arr-ch-att" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#aa1141"/>
+          </marker>
+        </defs>
+        <text x="550" y="22" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">&#x201C;was&#x201D; 的 Query 在全句的 Key 里找匹配 · 线越粗 = softmax 权重越大</text>
+        <!-- tokens -->
+        <g font-family="'JetBrains Mono', monospace" font-size="13" text-anchor="middle">
+          <rect x="60"  y="130" width="70" height="38" rx="7" fill="#f1f5f9" stroke="#475569" stroke-width="1.2"/><text x="95"  y="154" fill="#475569">The</text>
+          <rect x="150" y="130" width="70" height="38" rx="7" fill="#cffafe" stroke="#0e7490" stroke-width="2"/><text x="185" y="154" fill="#0e7490" font-weight="700">cat</text>
+          <rect x="240" y="130" width="76" height="38" rx="7" fill="#f1f5f9" stroke="#475569" stroke-width="1.2"/><text x="278" y="154" fill="#475569">that</text>
+          <rect x="336" y="130" width="50" height="38" rx="7" fill="#f1f5f9" stroke="#475569" stroke-width="1.2"/><text x="361" y="154" fill="#475569">I</text>
+          <rect x="406" y="130" width="70" height="38" rx="7" fill="#f1f5f9" stroke="#475569" stroke-width="1.2"/><text x="441" y="154" fill="#475569">saw</text>
+          <rect x="496" y="130" width="130" height="38" rx="7" fill="#f1f5f9" stroke="#475569" stroke-width="1.2"/><text x="561" y="154" fill="#475569">yesterday</text>
+          <rect x="646" y="130" width="70" height="38" rx="7" fill="#fce4e4" stroke="#aa1141" stroke-width="2.2"/><text x="681" y="154" fill="#9a0036" font-weight="700">was</text>
+          <rect x="736" y="130" width="120" height="38" rx="7" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1.2" stroke-dasharray="4 3"/><text x="796" y="154" fill="#94a3b8">sleeping</text>
+        </g>
+        <!-- attention arcs from was -->
+        <path d="M 670 128 Q 430 40 195 126" stroke="#aa1141" stroke-width="5" fill="none" opacity="0.85" marker-end="url(#arr-ch-att)"/>
+        <text x="420" y="62" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" fill="#aa1141">0.62 · 主语在这</text>
+        <path d="M 668 128 Q 560 84 448 126" stroke="#aa1141" stroke-width="2" fill="none" opacity="0.5" marker-end="url(#arr-ch-att)"/>
+        <text x="556" y="97" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#aa1141" opacity="0.7">0.11</text>
+        <path d="M 672 128 Q 630 104 575 126" stroke="#aa1141" stroke-width="1.2" fill="none" opacity="0.35" marker-end="url(#arr-ch-att)"/>
+        <text x="640" y="113" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#aa1141" opacity="0.55">0.04</text>
+        <!-- causal mask note -->
+        <text x="796" y="196" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="11" fill="#94a3b8">虚线框 = 未来的 token，被因果掩码挡住，看不到</text>
+      </svg>
+      <p class="caption">FIG 4 · "was" 隔着定语从句认领主语 "cat"（权重为示意值）</p>
+    </div>
+    <p>两个重要补充。第一，<strong>因果掩码（causal masking）</strong>：GPT 这类模型从左往右生成，第 5 个位置的 token 只能看位置 1–5，不许偷看未来。实现上很糙——把未来 token 的匹配分直接设成一个极小的数，softmax 之后权重自然趋近于零。</p>
+    <p>第二，attention 不只是"语法工具"。Anthropic 在 2022 年找到一类叫 <strong>induction heads（诱导头）</strong>的注意力头，专门干一件事：发现序列里出现过 <code>A B … A</code> 模式时，预测下一个是 <code>B</code>。这是目前关于 <strong>in-context learning</strong>（你在 prompt 里给几个例子，模型当场学会照做）最清楚的机制解释之一。</p>
+    <div class="aside">
+      <span class="tag">代价也写在脸上</span>
+      完全 attention 是每个 token 跟所有可见 token 两两比较——<b>序列长度翻倍，计算量大约翻四倍</b>。这就是长 prompt 贵的根本原因，也是 FlashAttention、稀疏 attention、线性 attention 这一整条研究线存在的理由。
+    </div>
+    <details class="fold">
+      <summary>为什么点积要除以 √d（"缩放"点积的缩放）</summary>
+      <div class="fold-body">
+        <p>Q 和 K 的点积是 d 个乘积加起来（d 是每个头的维度，常见 128）。维度越高，点积的方差越大，数值动不动就跑到很大或很小。而 softmax 对大数值非常敏感——输入一大，输出就变成几乎 one-hot，梯度趋近于零，训练学不动。</p>
+        <p class="formula">score = (Q · K) / √d</p>
+        <p>除以 √d 把方差拉回 1 的量级，让 softmax 工作在它的"灵敏区间"。一个纯粹为了数值健康的工程补丁，但没有它训练真的会崩。</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ================= 05 Multi-head ================= -->
+  <section class="section" id="multihead">
+    <p class="sec-kicker">05 · MULTI-HEAD ATTENTION</p>
+    <h2>多头：同一句话，三十二副眼镜同时看</h2>
+    <p>一个 attention 头一次只能表达一种关系视角。但语言里的关系是叠着来的：语法关系、指代关系、位置模式、语义关联，全在同一句话里同时存在。解法简单粗暴：<strong>多个头并行跑，各看各的</strong>。</p>
+    <p>这里有个容易想歪的细节：每个头拿到的<strong>不是</strong>token 向量切出来的一段，而是整个向量经过这个头<strong>自己的投影矩阵</strong>变换后的结果。4096 维的向量、32 个头，每个头确实只在 128 维里工作，但那 128 维是对全向量的一次学习出来的投影——是同一个 token 的 32 种"视角"，不是 32 块"切片"。各头独立做完 attention，输出拼接起来，再过一个线性层揉回完整宽度。</p>
+    <div class="figure">
+      <svg viewBox="0 0 1100 210" preserveAspectRatio="xMidYMid meet" aria-label="多头注意力结构">
+        <defs>
+          <marker id="arr-sl-mh" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+          </marker>
+        </defs>
+        <text x="550" y="20" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">每个头 = 一套自己的投影矩阵 · 并行跑 attention · 拼接后揉回原宽度</text>
+        <!-- input vector -->
+        <rect x="40" y="85" width="140" height="44" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+        <text x="110" y="104" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#b45309">token 向量</text>
+        <text x="110" y="120" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#b45309">4096 维</text>
+        <!-- fan out -->
+        <line x1="183" y1="100" x2="248" y2="56"  stroke="#475569" stroke-width="1.5" marker-end="url(#arr-sl-mh)"/>
+        <line x1="183" y1="107" x2="248" y2="107" stroke="#475569" stroke-width="1.5" marker-end="url(#arr-sl-mh)"/>
+        <line x1="183" y1="114" x2="248" y2="160" stroke="#475569" stroke-width="1.5" marker-end="url(#arr-sl-mh)"/>
+        <!-- heads -->
+        <g font-family="'JetBrains Mono', monospace" text-anchor="middle">
+          <rect x="252" y="36" width="200" height="40" rx="7" fill="#fce4e4" stroke="#aa1141" stroke-width="1.5"/>
+          <text x="352" y="53" font-size="10.5" fill="#9a0036" font-weight="600">head 1 · 语法头</text>
+          <text x="352" y="68" font-size="9" fill="#aa1141">动词 ←→ 主语 / 宾语</text>
+          <rect x="252" y="87" width="200" height="40" rx="7" fill="#fce4e4" stroke="#aa1141" stroke-width="1.5"/>
+          <text x="352" y="104" font-size="10.5" fill="#9a0036" font-weight="600">head 2 · 指代头</text>
+          <text x="352" y="119" font-size="9" fill="#aa1141">it / 它 → 指的是谁</text>
+          <rect x="252" y="138" width="200" height="40" rx="7" fill="#fce4e4" stroke="#aa1141" stroke-width="1.5"/>
+          <text x="352" y="155" font-size="10.5" fill="#9a0036" font-weight="600">head 3 · induction head</text>
+          <text x="352" y="170" font-size="9" fill="#aa1141">A B … A → 下一个是 B</text>
+          <text x="352" y="196" font-size="11" fill="#9ca3af">… × 32 个头，每头 128 维投影</text>
+        </g>
+        <!-- converge -->
+        <line x1="455" y1="56"  x2="520" y2="100" stroke="#475569" stroke-width="1.5" marker-end="url(#arr-sl-mh)"/>
+        <line x1="455" y1="107" x2="520" y2="107" stroke="#475569" stroke-width="1.5" marker-end="url(#arr-sl-mh)"/>
+        <line x1="455" y1="158" x2="520" y2="114" stroke="#475569" stroke-width="1.5" marker-end="url(#arr-sl-mh)"/>
+        <!-- concat + mix -->
+        <rect x="524" y="85" width="130" height="44" rx="8" fill="#f1f5f9" stroke="#475569" stroke-width="1.5"/>
+        <text x="589" y="104" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#334155">concat</text>
+        <text x="589" y="120" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#64748b">32 × 128</text>
+        <line x1="657" y1="107" x2="712" y2="107" stroke="#475569" stroke-width="1.5" marker-end="url(#arr-sl-mh)"/>
+        <rect x="716" y="85" width="150" height="44" rx="8" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+        <text x="791" y="104" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" fill="#b45309">线性层揉合</text>
+        <text x="791" y="120" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#b45309">→ 4096 维</text>
+        <!-- note -->
+        <text x="975" y="98" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="10.5" fill="#4b5563">分工没人安排，</text>
+        <text x="975" y="116" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="10.5" fill="#4b5563">是训练中自己长出来的</text>
+      </svg>
+      <p class="caption">FIG 5 · 多头 = 学出来的投影 × N，不是向量切片 × N</p>
+    </div>
+    <p>这些头各自管什么，<strong>没有任何人去分配</strong>。训练完了之后研究者去解剖，发现有的头专盯语法（动宾搭配、冠词找名词），有的头专做代词消解，有的头盯位置规律，还有上一节说的 induction heads。一层通常 32 个头，现代前沿模型几十层起步——加起来是<b class="hl">几千个</b>注意力头在同时工作。</p>
+    <p>工程侧还有两个高频词值得在这儿一并拿下：</p>
+    <ul class="plain">
+      <li><strong>KV cache</strong>：生成时，已经算过的 token 的 K、V 向量缓存在显存里，新 token 来了不用重算整个前缀。代价是长上下文生成时显存压力山大——你听到的"长上下文很烧显存"主要就是它。</li>
+      <li><strong>GQA（Grouped-Query Attention）</strong>：让多个 Q 头<strong>共享</strong>少量 K/V 头。LLaMA-2 70B 是 64 个 Q 头共享 8 组 K/V，Mistral 7B 是 32 个 Q 头共享 8 组。精度几乎不掉，KV cache 和推理成本大幅下降——所以现在新模型几乎全标配。</li>
+    </ul>
+  </section>
+
+  <!-- ================= 06 FFN ================= -->
+  <section class="section" id="ffn">
+    <p class="sec-kicker">06 · FEED-FORWARD NETWORK</p>
+    <h2>FFN：开完会，回工位各自干活</h2>
+    <p>一个 Transformer 层里有两个主角。attention 是<strong>开会</strong>——token 之间交换信息；FFN（前馈网络）是<strong>回工位干活</strong>——每个 token 独立处理自己手头的信息，互相不说话。结构简单到有点失望：</p>
+    <ul class="plain">
+      <li><strong>扩展</strong>：把向量放大到几倍宽（原始 Transformer 放大 4 倍，现代 SwiGLU 系数不同）</li>
+      <li><strong>非线性</strong>：过一个激活函数，把空间"掰弯"</li>
+      <li><strong>压缩</strong>：压回原来的宽度</li>
+    </ul>
+    <p>中间那一步看着不起眼，其实是命门：没有非线性，两个线性层在数学上等价于一个线性层，叠一百层也还是一次矩阵乘法。激活函数的选型这些年也换了几代：原始 Transformer 用 ReLU，GPT/BERT 时代换 GELU，现在 LLaMA、Mistral、PaLM 用 SwiGLU。</p>
+    <p>真正让人意外的是另一件事：<strong>稠密模型的参数大头不在 attention，在 FFN</strong>。而解释性研究发现，模型记住的事实和语义结构，很大程度上就存在这些 FFN 权重里。有的神经元专门在出现"埃菲尔铁塔"相关文本时激活，有的对编程语言敏感，有的盯过去式动词。"巴黎有埃菲尔铁塔"这条知识，就分布式地写在某几层 FFN 的权重里。</p>
+    <div class="aside">
+      <span class="tag">这事已经能动手术了</span>
+      ROME（Rank-One Model Editing）这类方法可以<b>不重新训练</b>，直接对特定 FFN 权重矩阵做一次低秩修改，把"埃菲尔铁塔在巴黎"改成"在罗马"——之后模型生成的相关文本会真的跟着改口。事实不是存在某个数据库里，就是存在权重里，而且能被定点编辑。
+    </div>
+    <p>FFN 还是当下最重要的扩容手段的发生地——<strong>MoE（Mixture of Experts，专家混合）</strong>。把一个稠密 FFN 换成多个并行的 FFN（"专家"），外加一个路由网络，给每个 token 现场挑选用哪几个专家。Mixtral 8x7B 每层 8 个专家、每个 token 只激活 2 个：<b class="hl">总参数 46.7B，每个 token 实际只用约 12.9B</b>。参数规模上去了，推理成本几乎没涨——这就是前沿模型纷纷转 MoE 的原因。</p>
+    <div class="figure">
+      <svg viewBox="0 0 1100 220" preserveAspectRatio="xMidYMid meet" aria-label="FFN 与 MoE">
+        <defs>
+          <marker id="arr-teal-ffn" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#0e7490"/>
+          </marker>
+        </defs>
+        <text x="280" y="22" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">稠密 FFN：扩展 → 掰弯 → 压回</text>
+        <!-- dense FFN bowtie -->
+        <polygon points="100,95 240,55 240,160 100,120" fill="#cffafe" stroke="#0e7490" stroke-width="1.5" opacity="0.75"/>
+        <polygon points="240,55 380,95 380,120 240,160" fill="#cffafe" stroke="#0e7490" stroke-width="1.5" opacity="0.75"/>
+        <rect x="62" y="88" width="38" height="38" rx="6" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+        <rect x="382" y="88" width="38" height="38" rx="6" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+        <text x="240" y="115" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="11" font-weight="700" fill="#0e7490">× 4 宽</text>
+        <text x="240" y="186" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#0e7490">ReLU → GELU → SwiGLU</text>
+        <text x="240" y="135" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="10" fill="#0e7490">中间过非线性</text>
+        <!-- divider -->
+        <line x1="490" y1="40" x2="490" y2="195" stroke="#e5e7eb" stroke-width="1.3" stroke-dasharray="4 4"/>
+        <!-- MoE -->
+        <text x="800" y="22" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">MoE：路由器给每个 token 挑 2 个专家</text>
+        <rect x="540" y="88" width="100" height="40" rx="7" fill="#fef3c7" stroke="#b45309" stroke-width="1.5"/>
+        <text x="590" y="112" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10.5" fill="#b45309">token</text>
+        <rect x="668" y="88" width="92" height="40" rx="7" fill="#ede9fe" stroke="#6d28d9" stroke-width="1.8"/>
+        <text x="714" y="106" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#6d28d9" font-weight="700">Router</text>
+        <text x="714" y="120" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="8.5" fill="#6d28d9">挑 2 / 8</text>
+        <line x1="643" y1="108" x2="664" y2="108" stroke="#0e7490" stroke-width="1.5" marker-end="url(#arr-teal-ffn)"/>
+        <!-- experts grid -->
+        <g font-family="'JetBrains Mono', monospace" font-size="9.5" text-anchor="middle">
+          <rect x="800" y="48"  width="64" height="30" rx="5" fill="#cffafe" stroke="#0e7490" stroke-width="2"/><text x="832" y="67" fill="#0e7490" font-weight="700">E1 ✓</text>
+          <rect x="874" y="48"  width="64" height="30" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/><text x="906" y="67" fill="#94a3b8">E2</text>
+          <rect x="948" y="48"  width="64" height="30" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/><text x="980" y="67" fill="#94a3b8">E3</text>
+          <rect x="800" y="86"  width="64" height="30" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/><text x="832" y="105" fill="#94a3b8">E4</text>
+          <rect x="874" y="86"  width="64" height="30" rx="5" fill="#cffafe" stroke="#0e7490" stroke-width="2"/><text x="906" y="105" fill="#0e7490" font-weight="700">E6 ✓</text>
+          <rect x="948" y="86"  width="64" height="30" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/><text x="980" y="105" fill="#94a3b8">E5</text>
+          <rect x="800" y="124" width="64" height="30" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/><text x="832" y="143" fill="#94a3b8">E7</text>
+          <rect x="874" y="124" width="64" height="30" rx="5" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1.2"/><text x="906" y="143" fill="#94a3b8">E8</text>
+        </g>
+        <line x1="763" y1="100" x2="794" y2="68"  stroke="#0e7490" stroke-width="1.6" marker-end="url(#arr-teal-ffn)"/>
+        <line x1="763" y1="114" x2="868" y2="102" stroke="#0e7490" stroke-width="1.6" marker-end="url(#arr-teal-ffn)"/>
+        <text x="800" y="186" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10" fill="#6d28d9">Mixtral 8x7B：总参数 46.7B · 每 token 只跑 ~12.9B</text>
+      </svg>
+      <p class="caption">FIG 6 · 左：稠密 FFN 的"领结"结构 · 右：MoE 路由选择性激活</p>
+    </div>
+  </section>
+
+  <!-- ================= 07 Residual ================= -->
+  <section class="section" id="residual">
+    <p class="sec-kicker">07 · RESIDUAL STREAM &amp; NORM</p>
+    <h2>残差流：每层都在"追加批注"，没人能整页重写</h2>
+    <p>前面说了 attention 和 FFN 各干各的，那几十层是怎么串起来的？关键在一个不起眼的加号：每个子块（attention 或 FFN）的输出<strong>不会替换</strong>原来的 token 向量，而是<strong>加</strong>回去——新向量 = 旧向量 + 子块输出。</p>
+    <p>把这条贯穿全部层的向量想成一条<strong>传送带（残差流，residual stream）</strong>：每一层只能往传送带上"追加批注"，不能把前面的内容撕掉重写。三五十层甚至上百层走下来，每层的贡献是累积的，而且最初的 embedding 始终有一条加法直通道连到最后。</p>
+    <div class="figure">
+      <svg viewBox="0 0 1100 180" preserveAspectRatio="xMidYMid meet" aria-label="残差流示意">
+        <defs>
+          <marker id="arr-am-res" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#b45309"/>
+          </marker>
+          <marker id="arr-sl-res" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+            <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569"/>
+          </marker>
+        </defs>
+        <text x="550" y="20" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="12" fill="#9ca3af">残差流 = 一条贯穿所有层的传送带，每个子块只能往上加，不能覆盖</text>
+        <!-- main stream -->
+        <line x1="60" y1="100" x2="1040" y2="100" stroke="#b45309" stroke-width="4" marker-end="url(#arr-am-res)"/>
+        <text x="78" y="86" font-family="'JetBrains Mono', monospace" font-size="10" fill="#b45309">embedding</text>
+        <text x="985" y="86" font-family="'JetBrains Mono', monospace" font-size="10" fill="#b45309">→ 输出</text>
+        <!-- block 1: attention -->
+        <g>
+          <path d="M 220 100 C 220 52 260 52 260 52 L 320 52 C 360 52 360 100 360 100" stroke="#aa1141" stroke-width="2" fill="none" marker-end="url(#arr-am-res)"/>
+          <rect x="240" y="36" width="100" height="32" rx="7" fill="#fce4e4" stroke="#aa1141" stroke-width="1.5"/>
+          <text x="290" y="56" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10.5" fill="#9a0036">Attention</text>
+          <circle cx="360" cy="100" r="11" fill="#fff" stroke="#b45309" stroke-width="1.8"/>
+          <text x="360" y="105" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="13" fill="#b45309">+</text>
+        </g>
+        <!-- block 2: FFN -->
+        <g>
+          <path d="M 470 100 C 470 52 510 52 510 52 L 570 52 C 610 52 610 100 610 100" stroke="#0e7490" stroke-width="2" fill="none" marker-end="url(#arr-am-res)"/>
+          <rect x="495" y="36" width="90" height="32" rx="7" fill="#cffafe" stroke="#0e7490" stroke-width="1.5"/>
+          <text x="540" y="56" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="10.5" fill="#0e7490">FFN</text>
+          <circle cx="610" cy="100" r="11" fill="#fff" stroke="#b45309" stroke-width="1.8"/>
+          <text x="610" y="105" text-anchor="middle" font-family="'JetBrains Mono', monospace" font-size="13" fill="#b45309">+</text>
+        </g>
+        <!-- norm markers -->
+        <g font-family="'JetBrains Mono', monospace" font-size="9" text-anchor="middle">
+          <rect x="178" y="88" width="34" height="24" rx="5" fill="#ede9fe" stroke="#6d28d9" stroke-width="1.3"/>
+          <text x="195" y="104" fill="#6d28d9">N</text>
+          <rect x="428" y="88" width="34" height="24" rx="5" fill="#ede9fe" stroke="#6d28d9" stroke-width="1.3"/>
+          <text x="445" y="104" fill="#6d28d9">N</text>
+          <rect x="678" y="88" width="34" height="24" rx="5" fill="#ede9fe" stroke="#6d28d9" stroke-width="1.3"/>
+          <text x="695" y="104" fill="#6d28d9">N</text>
+        </g>
+        <text x="750" y="56" font-family="'Noto Sans SC', sans-serif" font-size="10.5" fill="#6d28d9">N = Norm，进子块前先把数值拉回可控范围（pre-norm）</text>
+        <text x="550" y="155" text-anchor="middle" font-family="'Noto Sans SC', sans-serif" font-size="11" fill="#4b5563">… 这个 "Norm → 子块 → 加回" 的小模式，重复几十次直到最后一层</text>
+      </svg>
+      <p class="caption">FIG 7 · 残差流 + pre-norm：加法直通道贯穿全部层</p>
+    </div>
+    <p>这招不是 Transformer 发明的，是从 <strong>ResNet（He et al. 2015，图像识别）</strong>抄来的。当年的问题是深网络根本训不动：训练信号穿过太多层之后不是弱到没了就是炸了，模型没法从错误里学习。残差捷径让信号能从输出直接流回输入，一下子让几百层的网络变得可训练。Transformer 全盘继承。如今做模型解释的研究里，残差流干脆成了核心研究对象——每个组件（每个头、每个 FFN，连最后的输出投影）都被看作"从传送带读、往传送带写"。</p>
+    <p>但全是加法也有麻烦：加了几十轮之后数值会失控，要么爆炸要么塌缩，训练直接失败。所以每个子块旁边都配一个<strong>归一化（normalization）</strong>，把向量重新缩放回可控范围。这里有两代演进：</p>
+    <ul class="plain">
+      <li><strong>位置</strong>：2017 原版在子块<em>之后</em>归一化（post-norm），浅层还行，深了难训练；从 GPT-2 起改成子块<em>之前</em>（<strong>pre-norm</strong>），LLaMA、Mistral 全是这个，深层稳得多。</li>
+      <li><strong>算法</strong>：原版 LayerNorm 做两件事——平移到均值为零 + 缩放；<strong>RMSNorm</strong> 把平移砍了只留缩放，更便宜，效果基本不丢。LLaMA、Mistral、Gemma、Phi 都用它。</li>
+    </ul>
+  </section>
+
+  <!-- ================= 08 Next token ================= -->
+  <section class="section" id="nexttoken">
+    <p class="sec-kicker">08 · NEXT-TOKEN PREDICTION</p>
+    <h2>下一个 token：模型唯一会做的事</h2>
+    <p>几十层走完，序列里每个 token 都有了一个最终向量。生成的时候只用<strong>最后一个 token 的</strong>那一条：把它投影成"词表里每一项一个分数"——词表 10 万项就是 10 万个数。这些数叫 <strong>logits</strong>，不是概率（可正可负、想多大多大），过一遍 softmax 才变成总和为 1 的概率分布。</p>
+    <p>然后是很多人不知道的一点：模型<strong>通常不会直接挑概率最高的那个</strong>。解码参数控制确定性和多样性的平衡——<strong>temperature</strong> 调低模型保守，调高就放飞；<strong>top-k / top-p</strong> 先把候选裁剪到最靠谱的一小撮再抽签。与其干讲，不如直接玩：</p>
+
+    <div class="lab" id="temp-lab">
+      <p class="lab-head">🌡 动手实验 · TEMPERATURE 如何改写概率分布</p>
+      <p class="lab-prompt">上文：<span class="ctx">今天天气真</span> → 下一个 token 抽中了：<span class="out" id="lab-sampled">?</span></p>
+      <div class="lab-slider">
+        <label>temperature</label>
+        <input type="range" id="lab-temp" min="0.1" max="2.0" step="0.05" value="1.0">
+        <span class="tval" id="lab-tval">1.00</span>
+      </div>
+      <div class="lab-bars" id="lab-bars"></div>
+      <div class="lab-actions">
+        <button id="lab-sample">🎲 按当前分布抽一个</button>
+        <p class="lab-note">logits 是固定的（假装模型已经算完了），变的只是 softmax(logit / T)。拖到 0.1 看它变成"几乎必选『好』"，拖到 2.0 看『香蕉』也开始有戏。</p>
+      </div>
+    </div>
+
+    <p>抽中一个 token 之后呢？<strong>拼回输入末尾，整个流程再来一遍</strong>（靠 KV cache 不必重算前缀），新一轮 attention、FFN、新的 logits、再抽下一个。你看到的整段回答，就是这个循环跑了几百上千次的产物，一次一个 token。生成到出现"序列结束"标记或者撞到长度上限为止。</p>
+    <div class="aside">
+      <span class="tag">最值得记住的一句</span>
+      基座模型的训练目标<b>只有</b>"在海量文本上预测下一个 token"。它没有被直接训练去"讲事实"、"会聊天"、"会推理"、"会写代码"——这些要么是从预测任务里顺带涌现的，要么是后训练（指令微调、人类反馈、安全对齐）追加上去的。理解了这一点，模型一本正经胡说八道（hallucination）就不那么神秘了：它在补全一段"看起来像真的"的文本，这正是它唯一被教过的事。
+    </div>
+    <details class="fold">
+      <summary>推理加速的当红技巧：speculative decoding（投机解码）</summary>
+      <div class="fold-body">
+        <p>一次只生成一个 token 太慢了。投机解码的玩法：让一个<strong>小而快</strong>的模型先往前猜好几个 token，再让大模型<strong>并行地</strong>一次性验证这一串。猜对的全部收下，猜错的从错处由大模型接管。</p>
+        <p>妙处在于：实现正确的话，最终输出的分布跟大模型单独慢慢生成<strong>完全一致</strong>——纯赚速度，不赔质量。你在各家 API 上感受到的"今年明显变快了"，有它一份功劳。</p>
+      </div>
+    </details>
+  </section>
+
+  <!-- ================= 09 Arch vs weights ================= -->
+  <section class="section" id="archvsweights">
+    <p class="sec-kicker">09 · ARCHITECTURE VS WEIGHTS</p>
+    <h2>架构 vs 权重：GPT、Claude、LLaMA 到底差在哪</h2>
+    <p>读到这里你可能想问：既然 GPT、Claude、Gemini、LLaMA 都是上面这套零件，那它们差在哪？答案分两层。<strong>架构层面，在本文的颗粒度上，它们基本是同一套设计</strong>：分词 → embedding → 位置编码 → 一摞 Transformer 层（多头 attention + FFN）→ 残差流 → 归一化 → 下一个 token 预测。</p>
+    <p>真正的差异在三处：</p>
+    <ul class="plain">
+      <li><strong>权重本身</strong>——不同的训练数据、不同的规模，学出来的几千亿个数字完全不同；</li>
+      <li><strong>配置</strong>——层数、词表大小、头数、总参数量、稠密还是 MoE；</li>
+      <li><strong>后训练</strong>——指令微调、人类反馈强化、安全对齐，这些决定了"聊起来像不像话"。</li>
+    </ul>
+    <p>还有个挺有意思的现象：2023–2025 年间，各家团队<strong>独立地</strong>收敛到了几乎同一组选择——pre-norm、RMSNorm、RoPE、SwiGLU、GQA，最大的那批再加 MoE。没有哪一年出现过一次性的大发明，这是 2017 年那个设计被反复打磨五年的累积结果。所谓"现代 Transformer"，指的就是这套公认配置。</p>
+    <table class="cheat">
+      <thead><tr><th>零件</th><th>2017 原版</th><th>2025 共识</th></tr></thead>
+      <tbody>
+        <tr><td>归一化位置</td><td>post-norm（子块后）</td><td>pre-norm（子块前），深层好训</td></tr>
+        <tr><td>归一化算法</td><td>LayerNorm（平移+缩放）</td><td>RMSNorm（只缩放，更便宜）</td></tr>
+        <tr><td>位置编码</td><td>正弦/余弦相加</td><td>RoPE（旋转 Q/K，编码相对位置）</td></tr>
+        <tr><td>FFN 激活</td><td>ReLU</td><td>SwiGLU</td></tr>
+        <tr><td>attention 形态</td><td>每头独立 K/V</td><td>GQA（多 Q 头共享少量 K/V）</td></tr>
+        <tr><td>FFN 形态</td><td>稠密</td><td>大模型多用 MoE 稀疏激活</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- ================= 10 Future ================= -->
+  <section class="section" id="future">
+    <p class="sec-kicker">10 · WHERE THIS IS GOING</p>
+    <h2>往后看：架构会换，问题不变</h2>
+    <p>Transformer 这种"一个架构吃遍所有领域"的局面，在机器学习历史上其实很反常。以前是图像一套网络、语言一套、音频又一套，做视觉的和做 NLP 的几乎不看对方的论文。现在语言、视觉、音频、多模态全是 Transformer 一家——这种大一统以前没出现过。</p>
+    <p>会不会被取代？候选者一直有：Mamba 和其他 state-space 模型在长序列上很有竞争力，各种混合架构也在试。而且"架构"这个词本身的含义也在漂移——五年前 MoE 还算异域风情，现在已经是前沿标配。</p>
+    <p>但这篇讲的东西不会过时，原因很简单：<strong>token 化、给离散符号赋予含义、注入顺序、token 间通信、token 内处理、深度网络的信号稳定、预测下一个符号——这些是任何序列模型都绕不开的问题</strong>。架构换代，换的是解法；问题本身会一直在。学会了问题和现在的解法，下一代架构出来时你看到的就不是天书，而是"哦，他们换了个方式解决位置编码"。</p>
+  </section>
+
+  <!-- ================= Refs ================= -->
+  <section class="section">
+    <p class="sec-kicker">REFERENCES</p>
+    <h2>原文与延伸阅读</h2>
+    <div class="refs">
+      <h3>📚 一手来源</h3>
+      <ul>
+        <li><a href="https://www.0xkato.xyz/how-llms-actually-work/" target="_blank" rel="noopener">How LLMs Actually Work</a><span class="who">0xkato · 2026 · 本文编译底本</span></li>
+        <li><a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">Attention Is All You Need</a><span class="who">Vaswani et al. · 2017 · 一切的起点</span></li>
+        <li><a href="https://arxiv.org/abs/2104.09864" target="_blank" rel="noopener">RoFormer: Enhanced Transformer with Rotary Position Embedding</a><span class="who">Su et al. · 2021 · RoPE</span></li>
+        <li><a href="https://arxiv.org/abs/2307.03172" target="_blank" rel="noopener">Lost in the Middle: How Language Models Use Long Contexts</a><span class="who">Liu et al. · 2023</span></li>
+        <li><a href="https://transformer-circuits.pub/2022/in-context-learning-and-induction-heads/index.html" target="_blank" rel="noopener">In-context Learning and Induction Heads</a><span class="who">Anthropic · 2022</span></li>
+        <li><a href="https://arxiv.org/abs/2202.05262" target="_blank" rel="noopener">Locating and Editing Factual Associations in GPT（ROME）</a><span class="who">Meng et al. · 2022</span></li>
+        <li><a href="https://arxiv.org/abs/2401.04088" target="_blank" rel="noopener">Mixtral of Experts</a><span class="who">Mistral AI · 2024 · 8x7B MoE</span></li>
+        <li><a href="https://arxiv.org/abs/1512.03385" target="_blank" rel="noopener">Deep Residual Learning for Image Recognition（ResNet）</a><span class="who">He et al. · 2015 · 残差的源头</span></li>
+      </ul>
+    </div>
+  </section>
+
+  <footer>
+    <a href="../index.html">← 返回 iostiny / doc</a>
+    <span class="sep">·</span>
+    <a href="https://www.0xkato.xyz/how-llms-actually-work/" target="_blank" rel="noopener">英文原文</a>
+    <span class="sep">·</span>
+    <span>CC-BY 4.0（编译部分）</span>
+  </footer>
+
+</div>
+
+<script>
+(function () {
+  // ---- 温度实验台：softmax(logit / T) ----
+  var CANDS = [
+    { tok: '好',   logit: 4.2 },
+    { tok: '不错', logit: 3.1 },
+    { tok: '热',   logit: 2.6 },
+    { tok: '冷',   logit: 1.8 },
+    { tok: '离谱', logit: 0.6 },
+    { tok: '香蕉', logit: -1.5 }
+  ];
+  var barsEl  = document.getElementById('lab-bars');
+  var tempEl  = document.getElementById('lab-temp');
+  var tvalEl  = document.getElementById('lab-tval');
+  var sampEl  = document.getElementById('lab-sampled');
+  var btnEl   = document.getElementById('lab-sample');
+  var rows = [];
+
+  CANDS.forEach(function (c) {
+    var row = document.createElement('div');
+    row.className = 'bar-row';
+    row.innerHTML =
+      '<span class="tok">' + c.tok + '</span>' +
+      '<span class="logit">logit ' + (c.logit >= 0 ? '+' : '') + c.logit.toFixed(1) + '</span>' +
+      '<span class="track"><span class="fill"></span></span>' +
+      '<span class="pct"></span>';
+    barsEl.appendChild(row);
+    rows.push(row);
+  });
+
+  function softmax(temp) {
+    var exps = CANDS.map(function (c) { return Math.exp(c.logit / temp); });
+    var sum = exps.reduce(function (a, b) { return a + b; }, 0);
+    return exps.map(function (e) { return e / sum; });
+  }
+
+  var probs = [];
+  function render() {
+    var t = parseFloat(tempEl.value);
+    tvalEl.textContent = t.toFixed(2);
+    probs = softmax(t);
+    probs.forEach(function (p, i) {
+      rows[i].querySelector('.fill').style.width = (p * 100).toFixed(2) + '%';
+      rows[i].querySelector('.pct').textContent = (p * 100).toFixed(1) + '%';
+    });
+  }
+
+  btnEl.addEventListener('click', function () {
+    var r = Math.random(), acc = 0, pick = CANDS.length - 1;
+    for (var i = 0; i < probs.length; i++) {
+      acc += probs[i];
+      if (r <= acc) { pick = i; break; }
+    }
+    sampEl.textContent = CANDS[pick].tok;
+  });
+
+  tempEl.addEventListener('input', render);
+  render();
+})();
+</script>
+</body>
+</html>
